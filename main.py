@@ -1,8 +1,12 @@
 from fastapi import FastAPI
 import httpx
-import base64
+import os
+from dotenv import load_dotenv
 from schemas.edge import PhotoRequest, OccupancyRequest, MonitoringRequest, CameraStreamRequest, \
     CameraUploadRequest
+
+load_dotenv()
+BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
 
 app = FastAPI()
 
@@ -14,7 +18,7 @@ async def get_photo(data: PhotoRequest):
     return {"success": True}
 
 def verify_plate(plate):
-    url = "http://backend-host:8000/edge/parking/verify-plate"
+    url = f"{BACKEND_URL}/edge/parking/verify-plate"
     payload = {"plate": plate}
     r = httpx.post(url, json=payload)
     print(r.json())
@@ -38,7 +42,7 @@ async def live_video_stream(data: CameraStreamRequest):
     return {"received": True}
 
 def upload_video_to_backend(video):
-    url = "http://backend-host:8000/edge/parking/verify-plate"
+    url = f"{BACKEND_URL}/edge/parking/verify-plate"
     payload = {"video": video}
     r = httpx.post(url, json=payload)
     print(r.json())
