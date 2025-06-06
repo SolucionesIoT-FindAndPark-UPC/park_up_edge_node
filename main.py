@@ -1,8 +1,10 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, UploadFile, File
 import httpx
 import os
 from dotenv import load_dotenv
-from schemas.edge import PhotoRequest, OccupancyRequest, MonitoringRequest, CameraStreamRequest, \
+
+from adapters.opencv_recognizer import OpenCVRecognizer
+from schemas.edge import OccupancyRequest, MonitoringRequest, CameraStreamRequest, \
     CameraUploadRequest
 
 load_dotenv()
@@ -10,12 +12,20 @@ BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
 
 app = FastAPI()
 
+# 0. DEPENDENCIES
+recognizer = OpenCVRecognizer()
+
 # 1. PARKING CIRCULATION
 
 @app.post("/edge/parking/circulation")
-async def get_photo(data: PhotoRequest):
+async def recognize_plate(file: UploadFile = File(...)):
+    contents = await file.read()
+    temp_file = f'/tmp/{file.filename}'
+    with open(temp_file, 'wb') as f:
+        f.write(contents)
+    plate_text = recognizer.recognize(temp_file)
     # Mock logic here
-    return {"success": True}
+    return {"plate": plate_text}
 
 def verify_plate(plate):
     url = f"{BACKEND_URL}/edge/parking/verify-plate"

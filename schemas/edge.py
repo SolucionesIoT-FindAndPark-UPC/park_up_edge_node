@@ -1,12 +1,4 @@
-from pydantic import BaseModel, Field
-from typing import Literal
-
-
-# ---------- 1. PARKING CIRCULATION ----------
-
-class PhotoRequest(BaseModel):
-    photo: str = Field(..., description="Base64-encoded photo")
-    action: Literal["entry", "exit"]
+from pydantic import BaseModel
 
 # ---------- 2. PARKING SITES ----------
 
