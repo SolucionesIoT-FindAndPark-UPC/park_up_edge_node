@@ -4,8 +4,16 @@ import os
 from dotenv import load_dotenv
 
 from adapters.opencv_recognizer import OpenCVRecognizer
-from schemas.edge import OccupancyRequest, MonitoringRequest, CameraStreamRequest, \
+from adapters.parking_sites.parking_state_updater import update_parking_status
+from adapters.monitoring.monitoring_analytics import register_monitoring
+from adapters.stream.stream_camera import save_stream_url
+
+from schemas.edge import (
+    OccupancyRequest,
+    MonitoringRequest,
+    CameraStreamRequest,
     CameraUploadRequest
+)
 
 load_dotenv()
 BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
@@ -37,19 +45,22 @@ def verify_plate(plate):
 
 @app.post("/edge/parking/sites/occupancy")
 async def change_occupancy(data: OccupancyRequest):
-    return {"status": "OK"}
+    response = update_parking_status(data.siteId, data.occupied)
+    return response
 
 # 3. MONITORING
 
 @app.post("/edge/monitoring/data")
 async def post_monitoring_data(data: MonitoringRequest):
-    return {"status": "OK"}
+    response = register_monitoring(data.siteId, data.metric, data.value)
+    return response
 
 # 4. INTERFACES
 
 @app.post("/edge/camera/stream")
 async def live_video_stream(data: CameraStreamRequest):
-    return {"received": True}
+    response = save_stream_url(data.cameraId, data.streamUrl)
+    return response
 
 def upload_video_to_backend(video):
     url = f"{BACKEND_URL}/edge/parking/verify-plate"
