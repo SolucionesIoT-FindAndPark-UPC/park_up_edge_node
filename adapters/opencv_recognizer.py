@@ -11,3 +11,5 @@ class OpenCVRecognizer(PlateRecognizer):
         text = pytesseract.image_to_string(thresh, config='--psm 7')
         print(f"OCR Text: {text.strip()}")
         return text.strip()
+    
+
