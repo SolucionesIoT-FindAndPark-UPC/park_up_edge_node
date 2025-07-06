@@ -5,6 +5,7 @@ import os
 import uuid
 import threading
 import time
+import requests
 from typing import Optional, Callable
 
 # Base de datos temporal para cámaras
@@ -32,7 +33,9 @@ class StreamProcessor:
         self.running = False
         self.thread = None
         self.last_processed = 0
-        self.process_interval = 3  # Process frame every 3 seconds
+        # Reducir intervalo para ESP32 CAM - procesar cada 2 segundos
+        self.process_interval = 2  # Process frame every 2 seconds for faster detection
+        self.frame_count = 0
         
     def start_processing(self):
         if self.running:
@@ -65,6 +68,82 @@ class StreamProcessor:
         }
     
     def _process_stream(self):
+        # Para ESP32 CAM, usar requests para obtener imágenes en lugar de cv2.VideoCapture
+        if "capture" in self.stream_url:
+            self._process_esp32_stream()
+        else:
+            self._process_video_stream()
+    
+    def _process_esp32_stream(self):
+        """Procesar stream específico de ESP32 CAM"""
+        print(f"[INFO] Started ESP32 processing for camera {self.camera_id}")
+        
+        while self.running:
+            try:
+                current_time = time.time()
+                
+                if current_time - self.last_processed >= self.process_interval:
+                    # Obtener imagen de ESP32
+                    response = requests.get(self.stream_url, timeout=10)
+                    
+                    if response.status_code == 200:
+                        # Convertir bytes a imagen
+                        import numpy as np
+                        from PIL import Image
+                        import io
+                        
+                        # Cargar imagen desde bytes
+                        image = Image.open(io.BytesIO(response.content))
+                        frame = np.array(image)
+                        
+                        # Procesar frame
+                        self._process_frame(frame)
+                        self.last_processed = current_time
+                        self.frame_count += 1
+                        
+                        print(f"[INFO] ESP32 frame #{self.frame_count} processed for {self.camera_id}")
+                    else:
+                        print(f"[WARNING] ESP32 returned status {response.status_code}")
+                
+                time.sleep(0.5)  # Esperar menos tiempo entre intentos
+                
+            except Exception as e:
+                print(f"[ERROR] ESP32 processing error for {self.camera_id}: {str(e)}")
+                time.sleep(2)
+        
+        print(f"[INFO] Stopped ESP32 processing for camera {self.camera_id}")
+    
+    def _process_video_stream(self):
+        """Procesar stream de video tradicional"""
+        cap = cv2.VideoCapture(self.stream_url)
+        
+        if not cap.isOpened():
+            print(f"[ERROR] Could not open stream: {self.stream_url}")
+            return
+            
+        print(f"[INFO] Started processing stream for camera {self.camera_id}")
+        
+        while self.running:
+            try:
+                ret, frame = cap.read()
+                if not ret:
+                    print(f"[WARNING] Failed to read frame from {self.camera_id}")
+                    time.sleep(1)
+                    continue
+                
+                current_time = time.time()
+                if current_time - self.last_processed >= self.process_interval:
+                    self._process_frame(frame)
+                    self.last_processed = current_time
+                
+                time.sleep(0.1)  # Small delay to prevent excessive CPU usage
+                
+            except Exception as e:
+                print(f"[ERROR] Stream processing error for {self.camera_id}: {str(e)}")
+                time.sleep(1)
+        
+        cap.release()
+        print(f"[INFO] Stopped processing stream for camera {self.camera_id}")
         cap = cv2.VideoCapture(self.stream_url)
         
         if not cap.isOpened():
