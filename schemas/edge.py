@@ -24,4 +24,12 @@ class CameraUploadRequest(BaseModel):
     timestamp: str
     video: str  # base64-encoded video
 
+class StreamProcessingRequest(BaseModel):
+    cameraId: str
+    streamUrl: str
+    processInterval: int = 3  # seconds between plate recognition attempts
+
+class StreamControlRequest(BaseModel):
+    cameraId: str
+
 
