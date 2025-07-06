@@ -1,0 +1,50 @@
+# Tests principales para endpoints de usuarios
+# Endpoints mantenidos después de la limpieza
+
+# 1. Test básico del sistema
+GET http://localhost:8000/
+Accept: application/json
+
+###
+
+# 2. Buscar usuario por ID
+GET http://localhost:8000/edge/users/1
+Accept: application/json
+
+###
+
+# 3. Buscar usuario por ID (manager)
+GET http://localhost:8000/edge/users/2
+Accept: application/json
+
+###
+
+# 4. Obtener todos los usuarios (información completa)
+GET http://localhost:8000/edge/users/list/all
+Accept: application/json
+
+###
+
+# 5. Obtener todos los usuarios (formato simplificado)
+GET http://localhost:8000/edge/users/list/simplified
+Accept: application/json
+
+###
+
+# 6. Buscar usuario por placa de vehículo
+GET http://localhost:8000/edge/users/plate/ABC123
+Accept: application/json
+
+###
+
+# 7. Buscar usuario por placa de vehículo (manager)
+GET http://localhost:8000/edge/users/plate/XYZ789
+Accept: application/json
+
+###
+
+# 8. Test con placa que no existe
+GET http://localhost:8000/edge/users/plate/NOEXISTE123
+Accept: application/json
+
+###

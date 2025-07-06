@@ -1,11 +1,72 @@
-# Test your FastAPI endpoints
+# Park Up Edge Node - Complete API Testing
 
+# 1. Basic endpoints
 GET http://127.0.0.1:8000/
 Accept: application/json
 
 ###
 
-GET http://127.0.0.1:8000/hello/User
+GET http://127.0.0.1:8000/hello/TestUser
 Accept: application/json
+
+###
+
+# 2. Parking circulation with file upload
+POST http://127.0.0.1:8000/edge/parking/circulation
+Content-Type: multipart/form-data; boundary=boundary
+
+--boundary
+Content-Disposition: form-data; name="file"; filename="test.jpg"
+Content-Type: image/jpeg
+
+< ./assets/carplate.jpeg
+--boundary--
+
+###
+
+# 3. Parking circulation with user lookup
+POST http://127.0.0.1:8000/edge/parking/circulation/with-user-lookup
+Content-Type: multipart/form-data; boundary=boundary
+
+--boundary
+Content-Disposition: form-data; name="file"; filename="test.jpg"
+Content-Type: image/jpeg
+
+< ./assets/carplate.jpeg
+--boundary--
+
+###
+
+# 4. Update parking site occupancy
+POST http://127.0.0.1:8000/edge/parking/sites/occupancy
+Content-Type: application/json
+
+{
+    "siteId": "P001",
+    "occupied": true
+}
+
+###
+
+# 5. Post monitoring data
+POST http://127.0.0.1:8000/edge/monitoring/data
+Content-Type: application/json
+
+{
+    "siteId": "P001",
+    "metric": "temperature",
+    "value": 25.5
+}
+
+###
+
+# 6. Save camera stream
+POST http://127.0.0.1:8000/edge/camera/stream
+Content-Type: application/json
+
+{
+    "cameraId": "cam_001",
+    "streamUrl": "http://192.168.18.85/capture"
+}
 
 ###

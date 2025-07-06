@@ -1,0 +1,110 @@
+# Mock Database Testing
+# Pruebas para la base de datos simulada
+
+# 1. Activar modo mock (si implementas un switch)
+POST http://localhost:8000/edge/users/test/mock
+Content-Type: application/json
+
+{}
+
+###
+
+# 2. Obtener todos los usuarios del mock
+GET http://localhost:8000/edge/users/cached
+
+###
+
+# 3. Buscar usuario por ID específico (admin)
+GET http://localhost:8000/edge/users/1
+
+###
+
+# 4. Buscar usuario por ID específico (manager)
+GET http://localhost:8000/edge/users/2
+
+###
+
+# 5. Buscar usuario por ID específico (usuario regular)
+GET http://localhost:8000/edge/users/4
+
+###
+
+# 6. Buscar usuario por email (admin)
+GET http://localhost:8000/edge/users/email/admin@parkup.com
+
+###
+
+# 7. Buscar usuario por email (manager)
+GET http://localhost:8000/edge/users/email/manager@parkup.com
+
+###
+
+# 8. Buscar usuario por email (usuario normal)
+GET http://localhost:8000/edge/users/email/user1@example.com
+
+###
+
+# 9. Buscar usuario por email que no existe
+GET http://localhost:8000/edge/users/email/noexiste@test.com
+
+###
+
+# 10. Buscar usuario por placa de vehículo (si implementas el endpoint)
+GET http://localhost:8000/edge/users/plate/ABC123
+
+###
+
+# 11. Buscar usuario por placa de vehículo diferente
+GET http://localhost:8000/edge/users/plate/XYZ789
+
+###
+
+# 12. Test de reconocimiento de placa + búsqueda de usuario
+POST http://localhost:8000/edge/parking/circulation/with-user-lookup
+Content-Type: multipart/form-data; boundary=boundary
+
+--boundary
+Content-Disposition: form-data; name="file"; filename="test.jpg"
+Content-Type: image/jpeg
+
+< ./assets/carplate.jpeg
+--boundary--
+
+###
+
+# 13. Simular detección de placa conocida en mock database
+POST http://localhost:8000/edge/mock/simulate-plate-detection
+Content-Type: application/json
+
+{
+    "license_plate": "ABC123",
+    "camera_id": "cam_entrance_01"
+}
+
+###
+
+# 14. Simular detección de placa desconocida
+POST http://localhost:8000/edge/mock/simulate-plate-detection
+Content-Type: application/json
+
+{
+    "license_plate": "UNKNOWN999",
+    "camera_id": "cam_entrance_01"
+}
+
+###
+
+# 15. Obtener estadísticas del mock database
+GET http://localhost:8000/edge/mock/stats
+
+###
+
+# 16. Get ALL users (información completa)
+GET http://localhost:8000/edge/users/list/all
+
+###
+
+# 17. Get ALL users (formato simplificado)
+GET http://localhost:8000/edge/users/list/simplified
+
+###

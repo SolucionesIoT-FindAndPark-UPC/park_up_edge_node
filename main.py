@@ -21,8 +21,15 @@ from adapters.users.user_sync import (
     copy_users,
     get_cached_users,
     get_user_by_id,
-    get_user_by_email,
-    test_mysql_connection
+    get_user_by_email
+)
+
+# Import mock database functions
+from adapters.users.mock_user_database import (
+    copy_users_from_mock,
+    get_user_by_id_mock,
+    get_user_by_email_mock,
+    get_user_by_plate
 )
 
 from schemas.edge import (
@@ -35,6 +42,33 @@ from schemas.edge import (
     UserSyncResponse,
     UserResponse,
 )
+
+# Additional imports for mock testing
+from pydantic import BaseModel
+
+# Hybrid function to get users from either mock or MySQL
+def get_user_hybrid(user_id: int = None, email: str = None, use_mock: bool = True):
+    """
+    Get user from mock database first, fallback to MySQL if needed
+    """
+    if use_mock:
+        try:
+            if user_id:
+                return get_user_by_id_mock(user_id)
+            elif email:
+                return get_user_by_email_mock(email)
+        except Exception as e:
+            print(f"Mock database failed, trying MySQL: {e}")
+    
+    # Fallback to MySQL
+    try:
+        if user_id:
+            return get_user_by_id(user_id)
+        elif email:
+            return get_user_by_email(email)
+    except Exception as e:
+        print(f"MySQL also failed: {e}")
+        return None
 
 load_dotenv()
 BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
@@ -161,13 +195,28 @@ async def sync_users_from_mysql(data: UserSyncRequest):
 
 @app.get("/edge/users/cached")
 async def get_cached_users_list():
-    """Get list of cached users in the edge node"""
+    """Get list of cached users - tries mock database first, then MySQL cache"""
     try:
+        # First try mock database
+        try:
+            users = copy_users_from_mock()
+            if users:
+                return {
+                    "success": True,
+                    "users_count": len(users),
+                    "users": users,
+                    "source": "mock_database"
+                }
+        except Exception as e:
+            print(f"Mock database failed, trying MySQL cache: {e}")
+        
+        # Fallback to MySQL cache
         users = get_cached_users()
         return {
             "success": True,
             "users_count": len(users),
-            "users": users
+            "users": users,
+            "source": "mysql_cache"
         }
     except Exception as e:
         return {
@@ -179,9 +228,11 @@ async def get_cached_users_list():
 
 @app.get("/edge/users/{user_id}", response_model=UserResponse)
 async def get_user_by_id_endpoint(user_id: int):
-    """Get specific user by ID"""
+    """Get specific user by ID - tries mock database first, then MySQL"""
     try:
-        user = get_user_by_id(user_id)
+        # First try mock database
+        user = get_user_hybrid(user_id=user_id, use_mock=True)
+        
         if user:
             # Return only the fields that match Java UserResource
             return UserResponse(
@@ -190,15 +241,19 @@ async def get_user_by_id_endpoint(user_id: int):
                 roles=user.get("roles", ["user"])
             )
         else:
-            raise HTTPException(status_code=404, detail="User not found")
+            raise HTTPException(status_code=404, detail=f"User with ID {user_id} not found")
+    except HTTPException:
+        raise  # Re-raise HTTP exceptions
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error getting user: {str(e)}")
 
 @app.get("/edge/users/email/{email}", response_model=UserResponse)
 async def get_user_by_email_endpoint(email: str):
-    """Get specific user by email"""
+    """Get specific user by email - tries mock database first, then MySQL"""
     try:
-        user = get_user_by_email(email)
+        # First try mock database
+        user = get_user_hybrid(email=email, use_mock=True)
+        
         if user:
             # Return only the fields that match Java UserResource
             return UserResponse(
@@ -207,21 +262,153 @@ async def get_user_by_email_endpoint(email: str):
                 roles=user.get("roles", ["user"])
             )
         else:
-            raise HTTPException(status_code=404, detail="User not found")
+            raise HTTPException(status_code=404, detail=f"User with email {email} not found")
+    except HTTPException:
+        raise  # Re-raise HTTP exceptions
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error getting user: {str(e)}")
 
-@app.get("/edge/users/test/mysql")
-async def test_mysql_connection_endpoint():
-    """Test MySQL database connection"""
+# ---------- USER MANAGEMENT ENDPOINTS ----------
+
+# Additional model for plate detection
+class PlateDetectionRequest(BaseModel):
+    license_plate: str
+    camera_id: str
+
+@app.get("/edge/users/{user_id}", response_model=UserResponse)
+async def get_user_by_id_endpoint(user_id: int):
+    """Get specific user by ID - tries mock database first, then MySQL"""
     try:
-        connection_ok = test_mysql_connection()
+        # First try mock database
+        user = get_user_hybrid(user_id=user_id, use_mock=True)
+        
+        if user:
+            # Return only the fields that match Java UserResource
+            return UserResponse(
+                id=user["id"],
+                username=user["username"],
+                roles=user.get("roles", ["user"])
+            )
+        else:
+            raise HTTPException(status_code=404, detail=f"User with ID {user_id} not found")
+    except HTTPException:
+        raise  # Re-raise HTTP exceptions
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting user: {str(e)}")
+
+@app.get("/edge/users/list/all")
+async def get_all_users():
+    """Get all users - returns complete user information from mock database or MySQL"""
+    try:
+        # First try mock database
+        try:
+            users = copy_users_from_mock()
+            if users:
+                return {
+                    "success": True,
+                    "users_count": len(users),
+                    "users": users,
+                    "source": "mock_database",
+                    "message": f"Retrieved {len(users)} users from mock database"
+                }
+        except Exception as e:
+            print(f"Mock database failed, trying MySQL: {e}")
+        
+        # Fallback to MySQL
+        try:
+            # Force a sync from MySQL if no mock data
+            result = copy_users()
+            if result.get("success", False):
+                users = result.get("users", [])
+                return {
+                    "success": True,
+                    "users_count": len(users),
+                    "users": users,
+                    "source": "mysql_database",
+                    "message": f"Retrieved {len(users)} users from MySQL"
+                }
+        except Exception as mysql_error:
+            print(f"MySQL also failed: {mysql_error}")
+        
+        # If both fail, return empty
         return {
-            "success": connection_ok,
-            "message": "MySQL connection successful" if connection_ok else "MySQL connection failed"
+            "success": False,
+            "message": "No users found in mock database or MySQL",
+            "users_count": 0,
+            "users": [],
+            "source": "none"
         }
+        
     except Exception as e:
         return {
             "success": False,
-            "message": f"Error testing MySQL connection: {str(e)}"
+            "message": f"Error getting all users: {str(e)}",
+            "users_count": 0,
+            "users": []
         }
+
+@app.get("/edge/users/list/simplified")
+async def get_all_users_simplified():
+    """Get all users with simplified format (only id, username, roles) compatible with Java UserResource"""
+    try:
+        # Get all users first
+        all_users_response = await get_all_users()
+        
+        if not all_users_response.get("success", False):
+            return all_users_response
+        
+        users = all_users_response.get("users", [])
+        
+        # Transform to simplified format
+        simplified_users = []
+        for user in users:
+            simplified_user = {
+                "id": user.get("id"),
+                "username": user.get("username"),
+                "roles": user.get("roles", ["user"])
+            }
+            simplified_users.append(simplified_user)
+        
+        return {
+            "success": True,
+            "users_count": len(simplified_users),
+            "users": simplified_users,
+            "source": all_users_response.get("source", "unknown"),
+            "message": f"Retrieved {len(simplified_users)} users in simplified format"
+        }
+        
+    except Exception as e:
+        return {
+            "success": False,
+            "message": f"Error getting simplified users: {str(e)}",
+            "users_count": 0,
+            "users": []
+        }
+
+@app.get("/edge/users/plate/{license_plate}")
+async def get_user_by_license_plate(license_plate: str):
+    """Get user by license plate from mock database"""
+    try:
+        user = get_user_by_plate(license_plate)
+        if user:
+            return UserResponse(
+                id=user["id"],
+                username=user["username"],
+                roles=user.get("roles", ["user"])
+            )
+        else:
+            raise HTTPException(status_code=404, detail=f"No user found for license plate: {license_plate}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting user by plate: {str(e)}")
+
+# ---------- BASIC ENDPOINTS ----------
+
+@app.get("/")
+async def root():
+    """Root endpoint"""
+    return {"message": "Park Up Edge Node API", "version": "1.0.0"}
+
+@app.get("/hello/{name}")
+async def say_hello(name: str):
+    """Simple hello endpoint for testing"""
+    return {"message": f"Hello {name}!"}
