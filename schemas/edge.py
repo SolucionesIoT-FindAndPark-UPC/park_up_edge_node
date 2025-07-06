@@ -32,4 +32,20 @@ class StreamProcessingRequest(BaseModel):
 class StreamControlRequest(BaseModel):
     cameraId: str
 
+# ---------- 5. USERS SYNCHRONIZATION ----------
+
+class UserSyncRequest(BaseModel):
+    force_sync: bool = False
+
+class UserSyncResponse(BaseModel):
+    success: bool
+    message: str
+    users_count: int
+    users: list = []
+
+class UserResponse(BaseModel):
+    id: int
+    username: str
+    roles: list[str] = []
+
 

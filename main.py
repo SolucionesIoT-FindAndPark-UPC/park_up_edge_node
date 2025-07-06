@@ -1,8 +1,8 @@
-from fastapi import FastAPI, UploadFile, File
+from fastapi import FastAPI, UploadFile, File, HTTPException
+from dotenv import load_dotenv
 import os
 import tempfile
 import uuid
-from dotenv import load_dotenv
 
 # Cambiar aquí el recognizer
 from adapters.fast_alpr_recognizer import FastALPRRecognizer
@@ -17,12 +17,23 @@ from adapters.stream.stream_camera import (
     get_active_streams
 )
 
+from adapters.users.user_sync import (
+    copy_users,
+    get_cached_users,
+    get_user_by_id,
+    get_user_by_email,
+    test_mysql_connection
+)
+
 from schemas.edge import (
     OccupancyRequest,
     MonitoringRequest,
     CameraStreamRequest,
     StreamProcessingRequest,
     StreamControlRequest,
+    UserSyncRequest,
+    UserSyncResponse,
+    UserResponse,
 )
 
 load_dotenv()
@@ -123,3 +134,94 @@ async def start_esp32_circulation_monitoring(camera_id: str, stream_url: str = "
 async def stop_esp32_circulation_monitoring(camera_id: str):
     """Stop monitoring ESP32 cam stream for parking circulation"""
     return stop_stream_processing(camera_id)
+
+# ---------- USERS SYNCHRONIZATION ENDPOINTS ----------
+
+@app.post("/edge/users/sync", response_model=UserSyncResponse)
+async def sync_users_from_mysql(data: UserSyncRequest):
+    """
+    Synchronize users from MySQL database to edge node and backend
+    This will copy all active users from the MySQL database
+    """
+    try:
+        result = copy_users()
+        return UserSyncResponse(
+            success=result["success"],
+            message=result["message"],
+            users_count=result["users_count"],
+            users=result.get("users", [])
+        )
+    except Exception as e:
+        return UserSyncResponse(
+            success=False,
+            message=f"Error during user synchronization: {str(e)}",
+            users_count=0,
+            users=[]
+        )
+
+@app.get("/edge/users/cached")
+async def get_cached_users_list():
+    """Get list of cached users in the edge node"""
+    try:
+        users = get_cached_users()
+        return {
+            "success": True,
+            "users_count": len(users),
+            "users": users
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "message": f"Error getting cached users: {str(e)}",
+            "users_count": 0,
+            "users": []
+        }
+
+@app.get("/edge/users/{user_id}", response_model=UserResponse)
+async def get_user_by_id_endpoint(user_id: int):
+    """Get specific user by ID"""
+    try:
+        user = get_user_by_id(user_id)
+        if user:
+            # Return only the fields that match Java UserResource
+            return UserResponse(
+                id=user["id"],
+                username=user["username"],
+                roles=user.get("roles", ["user"])
+            )
+        else:
+            raise HTTPException(status_code=404, detail="User not found")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting user: {str(e)}")
+
+@app.get("/edge/users/email/{email}", response_model=UserResponse)
+async def get_user_by_email_endpoint(email: str):
+    """Get specific user by email"""
+    try:
+        user = get_user_by_email(email)
+        if user:
+            # Return only the fields that match Java UserResource
+            return UserResponse(
+                id=user["id"],
+                username=user["username"],
+                roles=user.get("roles", ["user"])
+            )
+        else:
+            raise HTTPException(status_code=404, detail="User not found")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting user: {str(e)}")
+
+@app.get("/edge/users/test/mysql")
+async def test_mysql_connection_endpoint():
+    """Test MySQL database connection"""
+    try:
+        connection_ok = test_mysql_connection()
+        return {
+            "success": connection_ok,
+            "message": "MySQL connection successful" if connection_ok else "MySQL connection failed"
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "message": f"Error testing MySQL connection: {str(e)}"
+        }
