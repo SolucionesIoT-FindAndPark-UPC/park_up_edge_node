@@ -556,7 +556,8 @@ async def start_stream_plate_recognition(data: StreamProcessingRequest):
         camera_id=data.cameraId, 
         stream_url=data.streamUrl, 
         plate_recognizer=recognizer,
-        callback=plate_detected_callback
+        callback=plate_detected_callback,
+        servo_url=data.servoUrl
     )
 
 @app.post("/edge/camera/stream/stop-processing")
@@ -789,3 +790,114 @@ async def get_all_users():
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error getting all users: {str(e)}")
+
+@app.get("/detect-realtime")
+async def detect_realtime_plates():
+    """
+    Endpoint para detección de placas en tiempo real
+    Retorna el estado actual de detección compatible con el sistema automático
+    """
+    global last_detected_plate
+    
+    current_time = time.time()
+    
+    # Verificar si hay una detección reciente (últimos 5 segundos)
+    if (last_detected_plate["timestamp"] > 0 and 
+        (current_time - last_detected_plate["timestamp"]) < 5.0):
+        
+        plate_text = last_detected_plate["plate"]
+        
+        # Si hay una placa válida detectada
+        if plate_text and plate_text != "" and plate_text != "No plate detected":
+            return {
+                "detected": True,
+                "plates": [{
+                    "text": plate_text,
+                    "confidence": last_detected_plate.get("confidence", 1.0) * 100,
+                    "timestamp": last_detected_plate["timestamp"]
+                }],
+                "timestamp": current_time,
+                "status": "plate_detected",
+                "message": f"Placa detectada: {plate_text}"
+            }
+    
+    # No hay detección válida o es muy antigua
+    return {
+        "detected": False,
+        "plates": [],
+        "timestamp": current_time,
+        "status": "no_detection",
+        "message": "No se detectaron placas"
+    }
+
+@app.get("/health")
+async def health_check():
+    """Endpoint de salud para verificar que el servidor esté funcionando"""
+    return {
+        "status": "ok",
+        "timestamp": time.time(),
+        "service": "Park Up Edge Node",
+        "version": "1.0.0"
+    }
+
+@app.on_event("startup")
+async def startup_event():
+    """Configuración inicial al iniciar el servidor"""
+    print("🚀 Iniciando Park Up Edge Node...")
+    print("📋 Configurando detección automática de placas...")
+    
+    # Iniciar detección automática de placas desde ESP32
+    try:
+        # Usar el endpoint existente para iniciar el stream
+        esp32_ip = "192.168.18.93"
+        camera_id = "auto_detection_camera"
+        stream_url = f"http://{esp32_ip}/capture"
+        
+        def realtime_callback(result):
+            global last_detected_plate, detection_history
+            plate = result.get("plate", "")
+            current_time = result.get("timestamp", time.time())
+            
+            print(f"🎯 [TIEMPO REAL] Placa: '{plate}' - Tiempo: {current_time}")
+            
+            # Actualizar detección global
+            last_detected_plate = {
+                "plate": plate if plate != "No plate detected" else "",
+                "timestamp": current_time,
+                "confidence": 1.0
+            }
+            
+            # Agregar al historial solo si es válida
+            if plate and plate != "No plate detected" and plate != "":
+                detection_history.append({
+                    "plate": plate,
+                    "timestamp": current_time,
+                    "source": "realtime_auto"
+                })
+                
+                # Mantener solo las últimas 10 detecciones
+                if len(detection_history) > 10:
+                    detection_history = detection_history[-10:]
+                
+                print(f"✅ [GUARDADO] Placa '{plate}' agregada al historial")
+        
+        # Iniciar procesamiento automático
+        result = start_stream_processing(
+            camera_id=camera_id,
+            stream_url=stream_url,
+            plate_recognizer=recognizer,
+            callback=realtime_callback
+        )
+        
+        if result.get("success"):
+            print(f"✅ Detección automática iniciada: {stream_url}")
+        else:
+            print(f"⚠️ No se pudo iniciar detección automática: {result.get('message', 'Error desconocido')}")
+            
+    except Exception as e:
+        print(f"❌ Error iniciando detección automática: {e}")
+
+if __name__ == "__main__":
+    import uvicorn
+    print("🚀 Iniciando servidor FastAPI en puerto 8000...")
+    uvicorn.run(app, host="0.0.0.0", port=8000)

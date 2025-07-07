@@ -28,6 +28,7 @@ class StreamProcessingRequest(BaseModel):
     cameraId: str
     streamUrl: str
     processInterval: int = 3  # seconds between plate recognition attempts
+    servoUrl: str = None  # URL del servo motor para abrir la puerta
 
 class StreamControlRequest(BaseModel):
     cameraId: str

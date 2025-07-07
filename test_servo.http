@@ -1,0 +1,56 @@
+### Pruebas de Integración Servo Motor
+### Asegúrate de que el servidor esté ejecutándose: uvicorn main:app --reload --host 0.0.0.0 --port 8000
+
+### 1. Iniciar stream con servo motor
+POST http://localhost:8000/edge/camera/stream/start-processing
+Content-Type: application/json
+
+{
+  "cameraId": "parking-gate-1",
+  "streamUrl": "http://192.168.1.50/capture",
+  "servoUrl": "http://192.168.1.100/open",
+  "processInterval": 2
+}
+
+### 2. Verificar estado de streams activos
+GET http://localhost:8000/edge/camera/stream/status
+
+### 3. Detener stream
+POST http://localhost:8000/edge/camera/stream/stop-processing
+Content-Type: application/json
+
+{
+  "cameraId": "parking-gate-1"
+}
+
+### 4. Prueba con cámara local (si tienes webcam)
+POST http://localhost:8000/edge/camera/stream/start-processing
+Content-Type: application/json
+
+{
+  "cameraId": "local-webcam",
+  "streamUrl": "0",
+  "servoUrl": "http://192.168.1.100/open",
+  "processInterval": 3
+}
+
+### 5. Stream sin servo (comportamiento original)
+POST http://localhost:8000/edge/camera/stream/start-processing
+Content-Type: application/json
+
+{
+  "cameraId": "cam-without-servo",
+  "streamUrl": "http://192.168.1.50/capture",
+  "processInterval": 2
+}
+
+### 6. Test de reconocimiento manual (upload de imagen)
+POST http://localhost:8000/edge/plate-recognition
+Content-Type: multipart/form-data; boundary=----boundary
+
+------boundary
+Content-Disposition: form-data; name="image"; filename="plate.jpg"
+Content-Type: image/jpeg
+
+[imagen aquí]
+------boundary--
